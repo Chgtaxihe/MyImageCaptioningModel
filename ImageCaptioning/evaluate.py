@@ -2,7 +2,6 @@ import numpy as np
 import os
 from nltk.translate.bleu_score import sentence_bleu
 from nltk.translate.bleu_score import SmoothingFunction
-from nltk.translate.meteor_score import meteor_score
 from paddle import fluid
 
 import config
@@ -43,20 +42,6 @@ def calc_bleu(pred, real, weights=(0.25, 0.25, 0.25, 0.25)):
 def words2sentence(words):
     return ' '.join(words)
 
-
-def calc_meteor(pred, real):
-    if isinstance(pred, np.ndarray):
-        if pred.dtype == 'float32':
-            pred = np.rint(pred).astype('int32')
-        pred = pred.tolist()
-    total_score = 0
-    for p, r in zip(pred, real):
-        p = words2sentence(filter(p))
-        r = [words2sentence(e) for e in r]
-        total_score += meteor_score(r, p)
-    return total_score / len(pred)
-
-
 def evaluate():
     places = fluid.CUDAPlace(0)
     exe = fluid.Executor(places)
@@ -69,17 +54,14 @@ def evaluate():
     batch_size = config.train['batch_size']
     dr = DataReader()
     dr = dr.get_reader(batch_size, 'test')
-    bleu_score, mscore = [0] * 5, 0
+    bleu_score = [0] * 5
     bleu_vec = ([1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1])
-    use_meteor = config.train['calc_meteor']
     sentence_said = set()
     for l, data in enumerate(dr()):
         img, real_cap = zip(*data)
         cp = exe.run(feed={feed_target_names[0]: np.array(img, dtype='float32')}, fetch_list=fetch_targets)[0]
         for idx, vec in enumerate(bleu_vec):
             bleu_score[idx] += calc_bleu(cp, real_cap, vec)
-        if use_meteor:
-            mscore += calc_meteor(cp, real_cap)
         if config.evaluate['sentence_statistics']:
             for p in cp:
                 p = words2sentence(filter(p))
@@ -87,8 +69,6 @@ def evaluate():
     for i in range(len(bleu_score)):
         bleu_score[i] /= l + 1
     bleu_score[4] = sum(bleu_score[:-1]) / 4
-    mscore /= l + 1
-    print('Test set:\nMeteor 分数: {:.7f}'.format(mscore))
     print('BLEU [{:.7f}, {:.7f}, {:.7f}, {:.7f}] {:.7f}'.format(*bleu_score))
     if config.evaluate['sentence_statistics']:
         print('模型一共说了{}句不同的话'.format(len(sentence_said)))

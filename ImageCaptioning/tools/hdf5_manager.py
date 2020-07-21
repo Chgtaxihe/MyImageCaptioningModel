@@ -4,6 +4,8 @@ import os
 import re
 import h5py
 
+import config
+
 _split_file_pattern = re.compile(r'.*?\.hdf5_[0-9]+$')
 _db_name_filter = re.compile(r'(.*?)\.hdf5[_0-9]*$')
 _db_index_filter = re.compile(r'.*?\.hdf5_([0-9]+)$')
@@ -22,9 +24,9 @@ class Hdf5Manager:
             self._name2idx = json.load(f)
 
     def load_database(self, db_path):
-        """载入数据库
+        """载入数据集
 
-        :param db_path: 数据库的目录(str)
+        :param db_path: 数据集的目录(str)
         """
         self.close()
         if not isinstance(db_path, list):
@@ -36,16 +38,16 @@ class Hdf5Manager:
 
             db = [name for name in files if _split_file_pattern.match(name) is not None]
             if len(db) == 0:
-                raise Exception('{} 下未找到数据库'.format(db_path))
+                raise Exception('{} 下未找到数据集'.format(db_path))
             assert_name = _db_name_filter.findall(db[0])[0]
             is_names_equal = map(lambda x: _db_name_filter.findall(x)[0] == assert_name, db)
             if not all(is_names_equal):
-                raise Exception('{} 目录下存在多个数据库'.format(db_path))
+                raise Exception('{} 目录下存在多个数据集'.format(db_path))
             dbs.extend(map(lambda x: os.path.join(dbp, x), db))
 
         if len(dbs) > 1:
             dbs.sort(key=lambda x: int(_db_index_filter.findall(x)[0]))
-            print('读入数据库:\n{}'.format('\n'.join(dbs)))
+            print('读入数据集:\n{}'.format('\n'.join(dbs)))
         for path in dbs:
             hdf5_file = h5py.File(path, mode='r')
             self._db_files.append(hdf5_file)
@@ -79,9 +81,9 @@ class Hdf5Manager:
 class DbBuilder:
 
     def __init__(self, output_path, name, shape, max_size, db_length, dtype='float32'):
-        """为3维数据创建数据库
+        """为3维数据创建数据集
         :param max_size: 单个文件最多放多少张图片
-        :param db_length: 数据库总大小
+        :param db_length: 数据集总大小
         """
         if isinstance(shape, list):
             shape = tuple(shape)
@@ -115,7 +117,7 @@ class DbBuilder:
                                                    dtype=self.dtype,
                                                    chunks=tuple([1] + list(self.shape)),
                                                    compression='gzip',
-                                                   compression_opts=9)
+                                                   compression_opts=config.build_dataset['compression_opts'])
 
     def append(self, data):
         assert np.shape(data) == self.shape
@@ -137,9 +139,8 @@ def gen_hdf5():
     import time
     begin_time = time.time()
     import reader
-    image_paths = [r'F:\aichallenge\caption_train_images_20170902',
-                   r'F:\aichallenge\flickr8k']
-    output_path = r'F:\Dataset\challenge_flickr_mix_db'
+    image_paths = config.build_dataset['ImagePaths']
+    output_path = config.build_dataset['OutputPath']
     images = []
     name2idx = {}
     for image_path in image_paths:
@@ -157,23 +158,13 @@ def gen_hdf5():
             if _use_float16:
                 feat = feat.astype('float16')
             builder.append(feat)
-            if idx % 1000 == 0:
-                print(idx)
+            if idx % 10000 == 0:
+                print("生成hdf5文件 {}/{}".format(idx, len(images)))
 
     json.dump(name2idx, open(os.path.join(output_path, 'name2idx.json'), 'w'))
     end_time = time.time()
     print("运行时间: {}s".format(end_time - begin_time))
 
-def self_test():
-    import numpy
-    hdf5 = Hdf5Manager()
-    hdf5.load_database(['/home/aistudio/data/data28324', '/home/aistudio/data/data28236'])
-    hdf5.load_name2idx('/home/aistudio/work/ai_challenge_dict/name2idx.json')
-    arr = hdf5.read('b654dd5416c1bc15369564ef622b3e0abadac3ad.jpg')
-    print(arr.shape)
-
 
 if __name__ == '__main__':
     gen_hdf5()
-    # self_test()
-

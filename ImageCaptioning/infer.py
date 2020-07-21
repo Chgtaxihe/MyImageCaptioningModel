@@ -26,11 +26,8 @@ def download_image(url):
 def main(url):
     img = download_image(url)
     img = np.expand_dims(img, 0)
-    # [eval_prog, feed_target_names, fetch_targets] = fluid.io.load_inference_model(
-    #     dirname=os.path.join(config.train['checkpoint_path'], 'infer_bleu'),
-    #     executor=exe)
     [eval_prog, feed_target_names, fetch_targets] = fluid.io.load_inference_model(
-        dirname='F:/infer_bleu',
+        dirname=os.path.join(config.train['checkpoint_path'], 'infer'),
         executor=exe)
     result = exe.run(eval_prog, feed={feed_target_names[0]: img}, fetch_list=fetch_targets)[0]
     print(result[0].tolist())

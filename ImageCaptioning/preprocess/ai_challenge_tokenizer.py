@@ -1,25 +1,21 @@
+import json
 import os
+import numpy as np
 import random
 
-import numpy as np
+import config
 
-CAPTION_PATH = r'F:\Dataset\flick8k_cn'
-OUTPUT_DIR = CAPTION_PATH + '_dict'
+CAPTION_PATH = os.path.join(config.build_dataset['OutputPath'], 'temp')
+OUTPUT_DIR = config.build_dataset['OutputPath']
 TRAINING_SPLIT = os.path.join(CAPTION_PATH, 'train.txt')
 DEV_SPLIT = os.path.join(CAPTION_PATH, 'dev.txt')
 EVAL_SPLIT = os.path.join(CAPTION_PATH, 'test.txt')
-TOKEN_PATH = os.path.join(CAPTION_PATH, 'captions.token')
+TOKEN_PATH = os.path.join(CAPTION_PATH, 'token')
 seed = 123456789
 minimum_occur = 2  # 一个单词最少要出现的次数
-max_keep = 15000
+max_keep = config.build_dataset['max_keep']
 
 random.seed(seed)
-
-
-def word_extract(text):
-    text = text.strip()
-    words = text.split()
-    return list(words)
 
 
 def build_dict(path, train_div=None):
@@ -33,7 +29,7 @@ def build_dict(path, train_div=None):
             if train_div is not None:
                 if name not in train_div:
                     continue
-            words = word_extract(line)
+            words = list(line.strip().split())
             for word in words:
                 word_cnt[word] = word_cnt.get(word, 0) + 1
 
@@ -45,7 +41,7 @@ def build_dict(path, train_div=None):
             removed_word.append(word)
         else:
             reduced_word.append(word)
-    print(removed_word[:min(5, len(removed_word))], ' etc. are removed.')
+    print(removed_word[:min(5, len(removed_word))], ' 等词语被删除.')
     print('unk_size: {}'.format(len(words) - len(reduced_word)), end='\t')
 
     reduced_word = ['<pad>', '<unk>', '<start>', '<stop>'] + list(reduced_word)
@@ -62,7 +58,7 @@ def tokenize(path, word_idx):
         for line in f:
             name, context = line.split('\t')
             name = name[:-2]
-            words = word_extract(context)
+            words = list(context.strip().split())
             token = [word_idx.get(w, unk_idx) for w in words]
             tokens.append((name, token))
     random.shuffle(tokens)
@@ -99,7 +95,7 @@ def build_eval_db(path, names):
             name, content = line.split('\t')
             name = name[:-2]
             if name in result:
-                result[name].append(word_extract(content))
+                result[name].append(list(content.strip().split()))
     return result
 
 
@@ -119,9 +115,9 @@ def main():
     np.save(os.path.join(OUTPUT_DIR, 'dev_data.npy'), [dev, build_eval_db(p, dev)], allow_pickle=True)
     np.save(os.path.join(OUTPUT_DIR, 'eval_data.npy'), [test, build_eval_db(p, test)], allow_pickle=True)
 
-    print('训练集大小:{} 字典大小:{} 句子长度:{} <start>:{} <stop>:{}'.
+    print('训练集大小:{}\t字典大小:{}\t句子长度:{}\t<start>:{}\t<stop>:{}'.
           format(len(train_db), len(word_idx), max_len, word_idx['<start>'], word_idx['<stop>']))
-    import json
+
     with open(os.path.join(OUTPUT_DIR, "word2idx.json"), 'w', encoding='utf-8') as f:
         json.dump(word_idx, f, ensure_ascii=False)
     with open(os.path.join(OUTPUT_DIR, "idx2word.json"), 'w', encoding='utf-8') as f:
@@ -131,14 +127,5 @@ def main():
 if __name__ == '__main__':
     main()
 
-# 2020-04-02
-# ['逮捕', '障碍台', '捕', '捉鱼虾', '绿竹']  etc. are removed.
-# unk_size: 7930	训练集大小:892496 字典大小:12036 句子长度:35 <start>:2 <stop>:3
-
-# 2020-04-23
-# ['逮捕', '室內', '障碍台', '捉鱼虾', '绿竹']  etc. are removed.
-# unk_size: 8980	训练集大小:981413 字典大小:13141 句子长度:35 <start>:2 <stop>:3
-
-# 2020-04-27 flickr8k_cn
-# ['翻到', '农夫', '毛驴', '行囊', '玩气']  etc. are removed.
-# unk_size: 2366	训练集大小:36415 字典大小:2998 句子长度:22 <start>:2 <stop>:3
+# ['逮捕', '障碍台', '捉鱼虾', '斑点裤', '尸检']  等词语被删除.
+# unk_size: 8160	训练集大小:944996	字典大小:12295	句子长度:35	<start>:2	<stop>:3
